@@ -20,7 +20,7 @@ corise_image = modal.Image.debian_slim().pip_install("feedparser",
                                                      "ffmpeg-python").apt_install("ffmpeg").run_function(download_whisper)
 
 @stub.function(image=corise_image, gpu="any", timeout=600)
-def get_transcribe_podcast(rss_url, local_path):
+def get_transcribe_podcast(rss_url, local_path,num):
   print ("Starting Podcast Transcription Function")
   print ("Feed URL: ", rss_url)
   print ("Local Path:", local_path)
@@ -31,7 +31,8 @@ def get_transcribe_podcast(rss_url, local_path):
   podcast_title = mp_feed['feed']['title']
   episode_title = mp_feed.entries[1]['title']
   episode_image = mp_feed['feed']['image'].href
-  for item in mp_feed.entries[0].links:
+  episode_num = int(num)
+  for item in mp_feed.entries[episode_num].links:
     if (item['type'] == 'audio/mpeg'):
       episode_url = item.href
   episode_name = "podcast_episode.mp3"
@@ -194,44 +195,51 @@ def get_podcast_highlights(podcast_transcript):
 
 
 @stub.function(image=corise_image, secret=modal.Secret.from_name("my-openai-secret"))
-def get_market_information(podcast_transcript):
+def get_market_information(podcast_transcript,podcast_title):
   import openai
-  instructPrompt = """
-  You are a market specialist who is responsible for reporting the stock market price changes to a thousands of subscribers.
+  if podcast_title == "Marketplace":
   
-  Focus exclusively on the part of the podcast where they discuss the performance of the American stock exchanges such as the Dow, NASDAQ, and S&P 500. 
+    instructPrompt = """
+    You are a market specialist who is responsible for reporting the stock market price changes to a thousands of subscribers.
   
-  Report the performance of the American stock exchanges, including the change in points, percentage change and closing index level (do not include $ sign in front of it). The output should look like this:
+    Focus exclusively on the part of the podcast where they discuss the performance of the American stock exchanges such as the Dow, NASDAQ, and S&P 500. 
   
-  Dow Industrial: <PERFORMANCE>
+    Report the performance of the American stock exchanges, including the change in points, percentage change and closing index level (do not include $ sign in front of it). The output should look like this:
   
-  NASDAQ: <PERFORMANCE>
+    Dow Industrial:
   
-  S&P 500: <PERFORMANCE>
-  Do not include any other information from the podcast. Return "The podcast does not include information on the stock market" if the podcast does not talk about the stock market performance.
-  """
+    NASDAQ:
   
-  request = instructPrompt + podcast_transcript
+    S&P 500:
+    Do not include any other information (like the summary of the podcast) from the podcast.
+    """
+  
+    request = instructPrompt + podcast_transcript
 
-  chatOutput = openai.ChatCompletion.create(model="gpt-3.5-turbo-16k",
+    chatOutput = openai.ChatCompletion.create(model="gpt-3.5-turbo-16k",
                                             messages=[{"role": "system", "content": "You are a helpful assistant."},
                                                       {"role": "user", "content": request}
-                                                      ]
+                                                      ],
+                                                      temperature=0
                                             )
 
 
-  IndexLevels = chatOutput.choices[0].message.content
+    IndexLevels = chatOutput.choices[0].message.content
+
+  else:
+    IndexLevels = "The podcast does not contain information on the stock market performance."
+  
   return IndexLevels
 
 
 @stub.function(image=corise_image, secret=modal.Secret.from_name("my-openai-secret"), timeout=1200)
-def process_podcast(url, path):
+def process_podcast(url, path,num):
   output = {}
-  podcast_details = get_transcribe_podcast.call(url, path)
+  podcast_details = get_transcribe_podcast.call(url, path,num)
   podcast_summary = get_podcast_summary.call(podcast_details['episode_transcript'])
   podcast_guest = get_podcast_guest.call(podcast_details['episode_transcript'])
   podcast_highlights = get_podcast_highlights.call(podcast_details['episode_transcript'])
-  podcast_market = get_market_information.call(podcast_details['episode_transcript'])
+  podcast_market = get_market_information.call(podcast_details['episode_transcript'],podcast_details['podcast_title'])
   output['podcast_details'] = podcast_details
   output['podcast_guest'] = podcast_guest
   output['podcast_summary'] = podcast_summary
@@ -240,10 +248,10 @@ def process_podcast(url, path):
   return output
 
 @stub.local_entrypoint()
-def test_method(url, path):
+def test_method(url, path,num):
   output = {}
-  podcast_details = get_transcribe_podcast.call(url, path)
+  podcast_details = get_transcribe_podcast.call(url, path,num)
   print ("Podcast Summary: ", get_podcast_summary.call(podcast_details['episode_transcript']))
   print ("Podcast Guest Information: ", get_podcast_guest.call(podcast_details['episode_transcript']))
   print ("Podcast Highlights: ", get_podcast_highlights.call(podcast_details['episode_transcript']))
-  print ("Podcast Market Information: ", get_market_information.call(podcast_details['episode_transcript']))
+  print ("Podcast Market Information: ", get_market_information.call(podcast_details['episode_transcript'],podcast_details['podcast_title']))
