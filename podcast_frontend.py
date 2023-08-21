@@ -4,7 +4,7 @@ import json
 import os
 
 def main():
-    st.title("Newsletter Dashboard")
+    st.title("Podcast Information")
 
     available_podcast_info = create_dict_from_json_files('.')
 
@@ -19,8 +19,8 @@ def main():
 
         podcast_info = available_podcast_info[selected_podcast]
 
-        # Right section - Newsletter content
-        st.header("Newsletter Content")
+        # Right section - Podcast content
+        st.header("Podcast Content")
 
         # Display the podcast title
         st.subheader("Episode Title")
@@ -37,6 +37,13 @@ def main():
         with col2:
             st.image(podcast_info['podcast_details']['episode_image'], caption="Podcast Cover", width=300, use_column_width=True)
 
+        # Display podcast guests
+        st.subheader("Podcast Guests")
+        pd_guests = podcast_info['podcast_guest']
+        for moment in pd_guests.split('\n'):
+            st.markdown(
+                f"<p style='margin-bottom: 5px;'>{moment}</p>", unsafe_allow_html=True)
+
         # Display the five key moments
         st.subheader("Key Moments")
         key_moments = podcast_info['podcast_highlights']
@@ -44,6 +51,10 @@ def main():
             st.markdown(
                 f"<p style='margin-bottom: 5px;'>{moment}</p>", unsafe_allow_html=True)
 
+        # Display market information
+        st.subheader("Market Information")
+        st.write(podcast_info['podcast_market'])
+        
     # User Input box
     st.sidebar.subheader("Add and Process New Podcast Feed")
     url = st.sidebar.text_input("Link to RSS Feed")
